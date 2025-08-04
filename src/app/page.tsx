@@ -1,44 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function Home() {
   const [advocates, setAdvocates] = useState([]);
   const [filteredAdvocates, setFilteredAdvocates] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchAdvocates = async (searchTerm = "") => {
+    setLoading(true);
+    try {
+      const url = searchTerm
+        ? `/api/advocates?search=${encodeURIComponent(searchTerm)}`
+        : "/api/advocates";
+
+      const response = await fetch(url);
+      const jsonResponse = await response.json();
+
+      if (searchTerm) {
+        setFilteredAdvocates(jsonResponse.data);
+      } else {
+        setAdvocates(jsonResponse.data);
+        setFilteredAdvocates(jsonResponse.data);
+      }
+    } catch (error) {
+      console.error("Error fetching advocates:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     console.log("fetching advocates...");
-    fetch("/api/advocates").then((response) => {
-      response.json().then((jsonResponse) => {
-        setAdvocates(jsonResponse.data);
-        setFilteredAdvocates(jsonResponse.data);
-      });
-    });
+    fetchAdvocates();
   }, []);
 
   const onChange = (e) => {
-    const searchTerm = e.target.value;
+    const term = e.target.value;
+    setSearchTerm(term);
 
-    document.getElementById("search-term").innerHTML = searchTerm;
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
 
-    console.log("filtering advocates...");
-    const filteredAdvocates = advocates.filter((advocate) => {
-      return (
-        advocate.firstName.includes(searchTerm) ||
-        advocate.lastName.includes(searchTerm) ||
-        advocate.city.includes(searchTerm) ||
-        advocate.degree.includes(searchTerm) ||
-        advocate.specialties.includes(searchTerm) ||
-        advocate.yearsOfExperience.includes(searchTerm)
-      );
-    });
-
-    setFilteredAdvocates(filteredAdvocates);
+    // Set new timeout for search for 300 ms
+    searchTimeoutRef.current = setTimeout(() => {
+      if (!term.trim()) {
+        setFilteredAdvocates(advocates);
+        return;
+      }
+      console.log("searching advocates on server...");
+      fetchAdvocates(term);
+    }, 300);
   };
 
   const onClick = () => {
     console.log(advocates);
     setFilteredAdvocates(advocates);
+    setSearchTerm("");
   };
 
   return (
@@ -49,10 +71,17 @@ export default function Home() {
       <div>
         <p>Search</p>
         <p>
-          Searching for: <span id="search-term"></span>
+          Searching for: <span id="search-term">{searchTerm}</span>
+          {loading && <span style={{ color: "blue" }}> (loading...)</span>}
         </p>
-        <input style={{ border: "1px solid black" }} onChange={onChange} />
-        <button onClick={onClick}>Reset Search</button>
+        <input
+          style={{ border: "1px solid black" }}
+          value={searchTerm}
+          onChange={onChange}
+        />
+        <button onClick={onClick} disabled={loading}>
+          Reset Search
+        </button>
       </div>
       <br />
       <br />
